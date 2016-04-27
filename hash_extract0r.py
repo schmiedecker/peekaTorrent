@@ -6,8 +6,7 @@
 #                                                         #
 # This script parses torrent infos (by using bencode)     #
 # Extract piece length distribution                       #
-# Extract piece hashes and save them into DB              #
-# Create an Index on the table hashes                     #
+# Extract piece hashes and prints to stdout               #
 #                                                         #
 # Input:                                                  #
 #   - A directory containing torrents. The naming         #
@@ -17,8 +16,7 @@
 # python2 hash_extract0r.py <directory of torrents>       #
 #                                                         #
 # Output:                                                 #
-#   - A mysql DB, filled with the chunk hashes of         #
-#     the torrents supplied                               #
+#   - All chunk hashes, printed to stdout                 #
 #                                                         #
 # (c) 2016                                                #
 #                                                         #
@@ -34,7 +32,7 @@ import os
 from os import listdir
 from os.path import isfile, join, abspath
 from collections import Counter
-import MySQLdb
+
 
 # Check if torrent directory is supplied
 if len(sys.argv) < 2:
@@ -45,20 +43,6 @@ torrentdir = sys.argv[1]
 torrent_abspath = abspath(torrentdir)
 
 
-cnt = Counter()
-
-
-# Setup and connect the DB
-db = MySQLdb.connect(host="localhost",
-                     user="torrent",
-                     passwd="torrent",
-                     db="torrentChunkHash")
-
-c = db.cursor()
-
-# Create the actual table "hashes" and correspondig "files" table
-c.execute('CREATE TABLE IF NOT EXISTS hashes( Id INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY, InfoHash CHARACTER(40), ChunkHash CHARACTER(40) );')
-c.execute('CREATE TABLE IF NOT EXISTS files( Id INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY, Filename TEXT, InfoHash CHARACTER(40), PieceLength CHARACTER(20) );')
 
 for root, dirnames, filenames in os.walk(torrentdir):
   for torrentfile in filenames:
@@ -89,18 +73,25 @@ for root, dirnames, filenames in os.walk(torrentdir):
         if len(metainfo['info']['files']) > 0:
           multifile = True
 
+    # some variable we will use later
     old_pieces = 0
+    sha1_length = 20
+    piece_length = metainfo['info']['piece length']
+
+
 
     if multifile == True:
       # Do multifile stuff here
 
-      piece_length = metainfo['info']['piece length']
 
-      cnt[piece_length] += 1
+      try:
+        pieces = metainfo['info']['pieces']
+        hashes = [pieces[i:i+sha1_length] for i in range(0, len(pieces), sha1_length)]
+      except Exception, e:
+        print e
+        print "at file " + str(torrentfile)
+        continue
 
-      sha1_length = 20
-      pieces = metainfo['info']['pieces']
-      hashes = [pieces[i:i+sha1_length] for i in range(0, len(pieces), sha1_length)]
 
       for files in metainfo['info']['files']:
         if len(files['path']) > 1:
@@ -115,18 +106,19 @@ for root, dirnames, filenames in os.walk(torrentdir):
         # Skip old pieces
         hashes = hashes[num_pieces:]
 
-        # Save filename, infohash and piece length in the corresponding table
-        c.execute("""INSERT INTO files(Filename, InfoHash, PieceLength) VALUES (%s, %s, %s);""", ( str(filename), str(torrentHash), str(piece_length) ) )
+        # print filename, infohash and piece length
+        print "#", str(filename), "\t", str(torrentHash), "\t", str(piece_length)
 
-        # Iterate through the hashes and save them into the DB
+	counter = 0
+        # Iterate through the hashes and print them
         for h in file_hashes:
-          c.execute("""INSERT INTO hashes(InfoHash, ChunkHash) VALUES (%s, %s);""", ( str(torrentHash), str(hexlify(h)) ) )
+	  counter += 1
+	  print str(filename) + "\t" + str(hexlify(h)) + "\t" + str(counter)
 
 
     else:
       # This branch is the single-file branch
       # Extract the details from the torrent used later on
-
       try:
         filename = metainfo['info']['name']
         filelength = metainfo['info']['length']
@@ -135,36 +127,28 @@ for root, dirnames, filenames in os.walk(torrentdir):
         print "At file " + str(torrentfile)
         continue
 
-      piece_length = metainfo['info']['piece length']
 
-      cnt[piece_length] += 1
+      try:
+      	pieces = metainfo['info']['pieces']
 
-      pieces = metainfo['info']['pieces']
+        num_pieces = int(math.ceil(float(filelength)/float(piece_length)))
+        hashes = [pieces[i:i+sha1_length] for i in range(0, len(pieces), sha1_length)]
+      except Exception, e:
+	print e
+	print "at file " + str(torrentfile)
+	continue
 
-      num_pieces = int(math.ceil(float(filelength)/float(piece_length)))
-
-      # Some of the torrents trigger this check...
-      if len(pieces)/20 != num_pieces:
-        with open("torrents_piece_mismatch.txt", "a") as fail:
-          fail.write(str(torrentfile) + "\n")
-
-      sha1_length = 20
-
-      hashes = [pieces[i:i+sha1_length] for i in range(0, len(pieces), sha1_length)]
-
-      # Save filename, infohash and piece length in the corresponding table
-      c.execute("""INSERT INTO files(Filename, InfoHash, PieceLength) VALUES (%s, %s, %s);""", ( str(filename), str(torrentHash), str(piece_length) ) )
-
-      # Iterate through the hashes and save them into the DB
+      # print filename, infohash and piece length
+      print "#", str(filename), "\t", str(torrentHash), "\t", str(piece_length)
+  
+      counter = 0
+      # Iterate through the hashes and print them
       for h in hashes:
-        c.execute("""INSERT INTO hashes(InfoHash, ChunkHash) VALUES (%s, %s);""", ( str(torrentHash), str(hexlify(h)) ) )
+        counter += 1
+        print str(filename) + "\t" + str(hexlify(h)) + "\t" + str(counter)
 
-    db.commit()
 
-db.commit()
 
-c.execute("ALTER TABLE hashes ADD KEY(InfoHash);")
 
-# Commit the remaining stuff and close the DB connection
-db.commit()
-db.close()
+
+
