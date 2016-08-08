@@ -1,11 +1,5 @@
 # peekatorrent
-This is the proof-of-concept code of the peekatorrent paper, to be published at DFRWS'16, and will be pubished with "Digital Investigation" - if you use the torrents, please cite it:
-
-
-PeekaTorrent: Leveraging P2P Hash Values for Digital Forensics
-Sebastian Neuner, Martin Schmiedecker, Edgar R. Weippl
-SBA Research
-
+This is the proof-of-concept code of the peekatorrent paper, to be published at DFRWS'16.
 
 All software here is GPL 2, if not specified otherwise. You can find the paper as well as as plenty of data at https://www.peekatorrent.org
 
