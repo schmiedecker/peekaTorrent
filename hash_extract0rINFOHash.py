@@ -145,7 +145,7 @@ for root, dirnames, filenames in os.walk(torrentdir):
       # Iterate through the hashes and print them
       for h in hashes:
         counter += 1
-        print str(filename) + "\t" + str(hexlify(h)) + "\t" + str(counter)
+        print str(torrentHash) + "\t" + str(hexlify(h)) + "\t" + str(counter)
 
 
 
